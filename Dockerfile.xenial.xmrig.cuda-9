@@ -1,0 +1,88 @@
+# Dockerfile.xenial.xmrig.cuda-9
+
+# Pull the Ubuntu CUDA development image
+FROM nvidia/cuda:9.0-devel-ubuntu16.04
+
+# Define packages for the build environment
+ENV BUILD_PACKAGES=" \
+    git \
+    ca-certificates \
+    build-essential \
+    cmake \
+    libuv1-dev \
+    libmicrohttpd-dev \
+    "
+ 
+# Update package repos and install $BUILD_PACKAGES
+RUN apt-get -qq update && \
+    apt-get -yqq install --no-install-recommends ${BUILD_PACKAGES}
+
+# Create a user to do the build
+ENV BUILD_FOLDER=/minerbuild
+ENV APP_FOLDER=/app
+ENV APP_USER=minerbuilder
+ENV REPO_BRANCH=master
+ENV REPO_URL=https://github.com/xmrig/xmrig-nvidia.git
+
+RUN adduser $APP_USER && \
+    mkdir $BUILD_FOLDER && \
+    chown $APP_USER.users $BUILD_FOLDER
+ 
+# Switch to the builder user
+USER $APP_USER
+
+# Clone from the git repo
+RUN cd $BUILD_FOLDER && \
+    git clone $REPO_URL --branch $REPO_BRANCH --single-branch
+
+# Start the build
+RUN cd $BUILD_FOLDER/xmrig-nvidia && \
+    sed -i "s|constexpr const int kDonateLevel = 5;|constexpr const int kDonateLevel = 0;|g" src/donate.h && \
+    mkdir build && \
+    cd build && \
+    cmake .. -DWITH_HTTPD=OFF && \
+    make
+
+# Switch to root
+USER root
+
+# Copy the xmrig-nvidia binary to $APP_FOLDER
+RUN mkdir $APP_FOLDER && \
+    chown $APP_USER.users $APP_FOLDER && \
+    cp $BUILD_FOLDER/xmrig-nvidia/build/xmrig-nvidia $APP_FOLDER
+
+# Switch to a multistage build with the runtime image
+FROM nvidia/cuda:9.0-runtime-ubuntu16.04
+
+# Redefine the app user and folder - note app folder must be the same as the first stage
+ENV APP_FOLDER=/app
+ENV APP_USER=miner
+
+# Copy the stuff that we built
+COPY --from=0 $APP_FOLDER $APP_FOLDER
+COPY --from=0 /usr/local/lib /usr/local/lib
+
+# Define package(s) for the final environment
+ENV PACKAGES=" \
+    libuv1 \
+    "
+
+# Update package repos, install $PACKAGES, run post-installation cleanup
+RUN apt-get -qq update && \
+    apt-get -yqq install --no-install-recommends ${PACKAGES} && \
+    apt-get clean autoclean && \
+    rm -rf /var/lib/{apt,dpkg,cache,log}
+
+# Symlink the app to /usr/local/bin
+RUN ln -s $APP_FOLDER/xmrig-nvidia /usr/local/bin/xmrig-nvidia && \
+    chown -R root.root $APP_FOLDER
+
+# Recreate and switch to the app user for this build
+RUN adduser $APP_USER
+USER $APP_USER
+
+# Set the entrypoint for all comsole connections
+ENTRYPOINT ["xmrig-nvidia"]
+
+# Set the default command
+CMD [ "-h" ]
