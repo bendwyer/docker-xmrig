@@ -1,4 +1,4 @@
-# Dockerfile.xenial.xmrig.cpu
+# Dockerfile.xenial.cpu
 
 # Pull the Ubuntu Xenial image
 FROM ubuntu:xenial
