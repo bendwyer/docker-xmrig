@@ -1,0 +1,98 @@
+# Dockerfile.xenial.xmrig.cpu
+
+# Pull the Ubuntu Xenial image
+FROM ubuntu:xenial
+
+# Set build environment to noninteractive
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Define packages for the build environment
+ENV BUILD_PACKAGES=" \
+    git \
+    ca-certificates \
+    build-essential \
+    cmake \
+    libuv1-dev \
+    libmicrohttpd-dev \
+    gcc-7 \
+    g++-7 \
+    "
+
+# Add the gcc-7 repository
+RUN apt-get -qq update && \
+    apt-get -yqq install software-properties-common && \
+    add-apt-repository ppa:jonathonf/gcc-7.1
+
+# Update package repos and install $BUILD_PACKAGES
+RUN apt-get -qq update && \
+    apt-get -yqq install --no-install-recommends ${BUILD_PACKAGES}
+
+# Create a user to do the build
+ENV BUILD_FOLDER=/minerbuild
+ENV APP_FOLDER=/app
+ENV APP_USER=minerbuilder
+ENV REPO_BRANCH=master
+ENV REPO_URL=https://github.com/xmrig/xmrig.git
+
+RUN adduser $APP_USER && \
+    mkdir $BUILD_FOLDER && \
+    chown $APP_USER.users $BUILD_FOLDER
+ 
+# Switch to the builder user
+USER $APP_USER
+
+# Clone from the git repo
+RUN cd $BUILD_FOLDER && \
+    git clone $REPO_URL --branch $REPO_BRANCH --single-branch
+
+# Start the build
+RUN cd $BUILD_FOLDER/xmrig && \
+    sed -i "s|constexpr const int kDonateLevel = 5;|constexpr const int kDonateLevel = 0;|g" src/donate.h && \
+    mkdir build && \
+    cd build && \
+    cmake .. -DCMAKE_C_COMPILER=gcc-7 -DCMAKE_CXX_COMPILER=g++-7 -DWITH_HTTPD=OFF && \
+    make
+
+# Switch to root
+USER root
+
+# Copy the xmrig binary to $APP_FOLDER
+RUN mkdir $APP_FOLDER && \
+    chown $APP_USER.users $APP_FOLDER && \
+    cp $BUILD_FOLDER/xmrig/build/xmrig $APP_FOLDER
+
+# Switch to a multistage build and pull another Ubuntu Xenial image
+FROM ubuntu:xenial
+
+# Redefine the app user and folder - note app folder must be the same as the first stage
+ENV APP_FOLDER=/app
+ENV APP_USER=miner
+
+# Copy the stuff that we built
+COPY --from=0 $APP_FOLDER $APP_FOLDER
+COPY --from=0 /usr/local/lib /usr/local/lib
+
+# Define package(s) for the final environment
+ENV PACKAGES=" \
+    libuv1 \
+    "
+
+# Update package repos, install $PACKAGES, run post-installation cleanup
+RUN apt-get -qq update && \
+    apt-get -yqq install --no-install-recommends ${PACKAGES} && \
+    apt-get clean autoclean && \
+    rm -rf /var/lib/{apt,dpkg,cache,log}
+
+# Symlink the app to /usr/local/bin
+RUN ln -s $APP_FOLDER/xmrig /usr/local/bin/xmrig && \
+    chown -R root.root $APP_FOLDER
+
+# Recreate and switch to the app user for this build
+RUN adduser $APP_USER
+USER $APP_USER
+
+# Set the entrypoint for all comsole connections
+ENTRYPOINT ["xmrig"]
+
+# Set the default command
+CMD [ "-h" ]
