@@ -1,4 +1,4 @@
-# Dockerfile.xenial.xmrig.cuda-9
+# Dockerfile.xenial.xmrig.nvidia.cuda-9
 
 # Pull the Ubuntu CUDA development image
 FROM nvidia/cuda:9.0-devel-ubuntu16.04
