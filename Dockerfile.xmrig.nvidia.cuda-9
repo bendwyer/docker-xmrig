@@ -1,7 +1,11 @@
-# Dockerfile.xenial.nvidia.cuda-9
+# Dockerfile.xmrig.nvidia.cuda-9
 
 # Pull the Ubuntu CUDA development image
 FROM nvidia/cuda:9.0-devel-ubuntu16.04
+
+# Maintainer info and image description
+LABEL maintainer="Ben Dwyer <https://github.com/bendwyer/docker-xmrig>"
+LABEL description="Dockerized XMRig using docker-nvidia CUDA 9. Supports NVIDIA GPU mining."
 
 # Define packages for the build environment
 ENV BUILD_PACKAGES=" \
