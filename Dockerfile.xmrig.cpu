@@ -1,7 +1,11 @@
-# Dockerfile.xenial.cpu
+# Dockerfile.xmrig.cpu
 
 # Pull the Ubuntu Xenial image
 FROM ubuntu:xenial
+
+# Maintainer info and image description
+LABEL maintainer="Ben Dwyer <https://github.com/bendwyer/docker-xmrig>"
+LABEL description="Dockerized XMRig using Ubuntu 16.04. Supports CPU mining."
 
 # Set build environment to noninteractive
 ARG DEBIAN_FRONTEND=noninteractive
